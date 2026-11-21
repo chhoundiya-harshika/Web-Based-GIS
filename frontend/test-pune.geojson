@@ -1,0 +1,34 @@
+
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "My Test Location",
+        "category": "Testing"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [73.86, 18.52]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "My Test Area",
+        "category": "Testing"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [73.85, 18.51],
+          [73.87, 18.51],
+          [73.87, 18.53],
+          [73.85, 18.53],
+          [73.85, 18.51]
+        ]]
+      }
+    }
+  ]
+}

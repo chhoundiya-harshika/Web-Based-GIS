@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from "react";
 import L from "leaflet";
+
 import {
   MapContainer,
   TileLayer,
@@ -31,32 +32,63 @@ function MapEvents({ onBoundsChange }) {
 
 export default function App() {
   const [data, setData] = useState(null);
+  const [layers, setLayers] = useState([]);
   const [status, setStatus] = useState("Loading map data...");
-  const [showPoints, setShowPoints] = useState(true);
+
+  const [showSample, setShowSample] = useState(true);
+  const [showUploaded, setShowUploaded] = useState(true);
+
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function loadLayers() {
+    try {
+      const response = await fetch(`${API}/api/layers`);
+
+      if (!response.ok) {
+        throw new Error("Could not retrieve layers.");
+      }
+
+      const result = await response.json();
+      setLayers(result);
+
+    } catch (error) {
+      console.error("Layer loading error:", error);
+    }
+  }
 
   async function loadFeatures(
     bbox = "73.75,18.40,74.00,18.65"
   ) {
     try {
-      setStatus("Loading features...");
-
       const response = await fetch(
         `${API}/api/features?bbox=${encodeURIComponent(bbox)}`
       );
 
       if (!response.ok) {
-        throw new Error("Could not retrieve features");
+        throw new Error("Could not retrieve map features.");
       }
 
       const result = await response.json();
 
       setData(result);
-      setStatus(`${result.features.length} features loaded`);
+
+      setStatus(
+        `${result.features.length} features loaded`
+      );
 
     } catch (error) {
       setStatus(error.message);
     }
+  }
+
+  async function refreshData() {
+    setStatus("Refreshing map data...");
+
+    await Promise.all([
+      loadFeatures(),
+      loadLayers()
+    ]);
   }
 
   async function handleUpload(event) {
@@ -64,8 +96,10 @@ export default function App() {
 
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith(".geojson") &&
-        !file.name.toLowerCase().endsWith(".json")) {
+    if (
+      !file.name.toLowerCase().endsWith(".geojson") &&
+      !file.name.toLowerCase().endsWith(".json")
+    ) {
       alert("Please select a GeoJSON or JSON file.");
       event.target.value = "";
       return;
@@ -92,14 +126,18 @@ export default function App() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.detail || "Upload failed");
+        throw new Error(
+          result.detail || "Upload failed."
+        );
       }
+
+      setShowUploaded(true);
 
       alert(
         `Successfully uploaded ${result.features_uploaded} features!`
       );
 
-      await loadFeatures();
+      await refreshData();
 
     } catch (error) {
       alert("Upload error: " + error.message);
@@ -111,9 +149,81 @@ export default function App() {
     }
   }
 
+  async function removeUploadedLayer() {
+    const uploadedLayer = layers.find(
+      (layer) => layer.id === "uploaded-features"
+    );
+
+    if (!uploadedLayer || uploadedLayer.feature_count === 0) {
+      alert("There are no uploaded features to remove.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "This will permanently delete all uploaded GeoJSON features from the database. Continue?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeleting(true);
+      setStatus("Removing uploaded layer...");
+
+      const response = await fetch(
+        `${API}/api/layers/uploaded-features`,
+        {
+          method: "DELETE"
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.detail || "Could not remove layer."
+        );
+      }
+
+      alert(
+        `Uploaded layer removed. ${result.deleted_count} features deleted.`
+      );
+
+      await refreshData();
+
+    } catch (error) {
+      alert(error.message);
+      setStatus(error.message);
+
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   useEffect(() => {
-    loadFeatures();
+    refreshData();
   }, []);
+
+  const visibleFeatures = data
+    ? {
+        ...data,
+        features: data.features.filter((feature) => {
+          const source = feature.properties?.source;
+
+          if (source === "sample") return showSample;
+          if (source === "uploaded") return showUploaded;
+
+          return false;
+        })
+      }
+    : null;
+
+  const sampleLayer = layers.find(
+    (layer) => layer.id === "sample-points"
+  );
+
+  const uploadedLayer = layers.find(
+    (layer) => layer.id === "uploaded-features"
+  );
 
   return (
     <main className="app">
@@ -138,8 +248,8 @@ export default function App() {
           <h2>Map Controls</h2>
 
           <p className="muted">
-            Explore geographical locations and upload
-            your own GIS datasets.
+            Explore geographic locations and manage
+            your GIS datasets.
           </p>
 
           <div className="upload-section">
@@ -147,14 +257,14 @@ export default function App() {
 
             <p>
               Select a .geojson or .json file to add
-              geographical features.
+              geographic features.
             </p>
 
             <input
               type="file"
               accept=".geojson,.json,application/geo+json,application/json"
               onChange={handleUpload}
-              disabled={uploading}
+              disabled={uploading || deleting}
             />
 
             {uploading && (
@@ -163,26 +273,69 @@ export default function App() {
           </div>
 
           <div className="layer-section">
-            <h3>Map Layers</h3>
+            <h3>Layer Management</h3>
 
-            <label className="layer-toggle">
-              <input
-                type="checkbox"
-                checked={showPoints}
-                onChange={(event) =>
-                  setShowPoints(event.target.checked)
+            <div className="layer-card">
+
+              <label className="layer-toggle">
+                <input
+                  type="checkbox"
+                  checked={showSample}
+                  onChange={(event) =>
+                    setShowSample(event.target.checked)
+                  }
+                />
+
+                <span>
+                  <strong>Sample Pune Locations</strong>
+                  <small>
+                    {sampleLayer?.feature_count ?? 0} features
+                  </small>
+                </span>
+              </label>
+
+            </div>
+
+            <div className="layer-card">
+
+              <label className="layer-toggle">
+                <input
+                  type="checkbox"
+                  checked={showUploaded}
+                  onChange={(event) =>
+                    setShowUploaded(event.target.checked)
+                  }
+                />
+
+                <span>
+                  <strong>Uploaded GeoJSON</strong>
+                  <small>
+                    {uploadedLayer?.feature_count ?? 0} features
+                  </small>
+                </span>
+              </label>
+
+              <button
+                className="remove-layer"
+                onClick={removeUploadedLayer}
+                disabled={
+                  deleting ||
+                  uploading ||
+                  !uploadedLayer ||
+                  uploadedLayer.feature_count === 0
                 }
-              />
+              >
+                {deleting ? "Removing..." : "Remove uploaded data"}
+              </button>
 
-              Sample and uploaded features
-            </label>
+            </div>
           </div>
 
           <button
-            onClick={() => loadFeatures()}
-            disabled={uploading}
+            onClick={refreshData}
+            disabled={uploading || deleting}
           >
-            Refresh Map Data
+            Refresh Map and Layers
           </button>
 
           <div className="status">
@@ -193,8 +346,9 @@ export default function App() {
           <div className="hint">
             <strong>How to use</strong>
             <p>
-              Upload GeoJSON datasets, zoom into the map
-              and click markers to view their details.
+              Toggle individual layers to show or hide
+              geographic data. Upload GeoJSON files to
+              add your own datasets.
             </p>
           </div>
 
@@ -222,15 +376,21 @@ export default function App() {
               onBoundsChange={(bbox) => loadFeatures(bbox)}
             />
 
-            {showPoints && data && (
+            {visibleFeatures && (
               <GeoJSON
-                key={JSON.stringify(data)}
-                data={data}
+                key={JSON.stringify(visibleFeatures)}
+                data={visibleFeatures}
                 pointToLayer={(feature, latlng) =>
                   L.circleMarker(latlng, {
                     radius: 8,
-                    color: "#155eef",
-                    fillColor: "#528bff",
+                    color:
+                      feature.properties?.source === "uploaded"
+                        ? "#15803d"
+                        : "#155eef",
+                    fillColor:
+                      feature.properties?.source === "uploaded"
+                        ? "#4ade80"
+                        : "#528bff",
                     fillOpacity: 0.9,
                     weight: 2
                   })
@@ -239,11 +399,23 @@ export default function App() {
                   const properties =
                     feature.properties || {};
 
-                  layer.bindPopup(`
-                    <strong>${properties.name || "Unnamed"}</strong>
-                    <br/>
-                    Category: ${properties.category || "N/A"}
-                  `);
+                  const content = document.createElement("div");
+                  const title = document.createElement("strong");
+
+                  title.textContent =
+                    properties.name || "Unnamed";
+
+                  const category = document.createElement("p");
+                  category.textContent =
+                    `Category: ${properties.category || "N/A"}`;
+
+                  const source = document.createElement("p");
+                  source.textContent =
+                    `Layer: ${properties.source || "Unknown"}`;
+
+                  content.append(title, category, source);
+
+                  layer.bindPopup(content);
                 }}
                 style={{
                   color: "#155eef",

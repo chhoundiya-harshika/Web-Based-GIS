@@ -71,3 +71,68 @@ button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* GIS Layer Management */
+
+.layer-section {
+  margin-top: 24px;
+}
+
+.layer-section h3 {
+  margin-bottom: 12px;
+}
+
+.layer-card {
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.layer-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.layer-toggle input {
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.layer-toggle span {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.layer-toggle strong {
+  font-size: 13px;
+}
+
+.layer-toggle small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.remove-layer {
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px;
+  border: 1px solid #fda29b;
+  border-radius: 7px;
+  background: #fff1f0;
+  color: #b42318;
+  cursor: pointer;
+}
+
+.remove-layer:hover {
+  background: #fee4e2;
+}
+
+.remove-layer:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
